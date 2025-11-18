@@ -3,11 +3,13 @@ import {
   Loader,
   Lock,
   LogOut,
+  Maximize2,
   MessageCircle,
   Plus,
   ShoppingBag,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -26,8 +28,11 @@ import {
   where,
 } from "firebase/firestore";
 
-// --- 1. CONFIGURAÇÃO SEGURA (PRODUÇÃO) ---
-// O código agora busca as chaves EXCLUSIVAMENTE do arquivo .env
+// --- 1. CONFIGURAÇÃO (ATENÇÃO AQUI) ---
+// ⚠️ MODO HÍBRIDO:
+// As chaves estão expostas AQUI apenas para a pré-visualização funcionar.
+// NO SEU COMPUTADOR: Descomente as linhas 'import.meta.env' e apague as strings diretas.
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY,
   authDomain: import.meta.env.VITE_AUTH_DOMAIN,
@@ -37,8 +42,9 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_APP_ID,
 };
 
-// Chave do ImgBB via variável de ambiente
-const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY;
+// Chave do ImgBB
+// const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY; <--- USE ESTA NO VS CODE
+const IMGBB_KEY = "c84a5731b24f82f3da759d1f73e1c3f1";
 
 // Constantes da Loja
 const SENHA_ADMIN = "mimo123";
@@ -46,14 +52,7 @@ const NUMERO_LOJA = "22988682317";
 const LOGO_LOJA = "/mirian1.jpeg";
 const LOGO_RODAPE = "/logo-ms.png";
 
-// Verificação de segurança para evitar tela branca silenciosa
-if (!firebaseConfig.apiKey) {
-  console.error("ERRO CRÍTICO: Variáveis de ambiente não encontradas.");
-  console.error(
-    "Verifique se o arquivo .env existe na raiz do projeto e se as chaves começam com VITE_"
-  );
-}
-
+// Inicialização
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -62,6 +61,9 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState("landing");
   const [products, setProducts] = useState([]);
+
+  // Estado para Tela Cheia (Zoom)
+  const [fullscreenImage, setFullscreenImage] = useState(null);
 
   // Estados do Cliente
   const [clientName, setClientName] = useState("");
@@ -83,7 +85,7 @@ export default function App() {
   // --- EFEITOS ---
   useEffect(() => {
     signInAnonymously(auth).catch((error) => {
-      console.error("Erro no login anônimo (verifique .env):", error);
+      console.error("Erro no login anônimo:", error);
     });
     return onAuthStateChanged(auth, setUser);
   }, []);
@@ -122,7 +124,6 @@ export default function App() {
     } else if (value.length > 2) {
       formatted = `(${value.slice(0, 2)}) ${value.slice(2)}`;
     }
-
     setClientWhats(formatted);
   };
 
@@ -185,8 +186,9 @@ export default function App() {
     const formData = new FormData();
     formData.append("image", file);
 
+    // Verifica se a chave existe (seja via .env ou hardcoded)
     if (!IMGBB_KEY) {
-      alert("ERRO CRÍTICO: Chave do ImgBB não encontrada no arquivo .env!");
+      alert("ERRO CRÍTICO: Chave do ImgBB não encontrada!");
       return null;
     }
 
@@ -364,12 +366,28 @@ export default function App() {
                   key={prod.id}
                   className="bg-white rounded-2xl shadow-md overflow-hidden border border-pink-50 hover:shadow-xl transition-all"
                 >
-                  <div className="h-64 bg-gray-100 overflow-hidden">
+                  {/* IMAGEM CLICÁVEL COM EFEITO HOVER */}
+                  <div
+                    className="h-64 bg-gray-100 overflow-hidden relative group cursor-pointer"
+                    onClick={() => setFullscreenImage(prod.image)}
+                    title="Clique para ver em tela cheia"
+                  >
                     <img
                       src={prod.image}
-                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={(e) => {
+                        e.target.src =
+                          "https://placehold.co/400x300/pink/white?text=Sem+Imagem";
+                      }}
                     />
+                    {/* Overlay com Texto */}
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
+                      <div className="bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg border border-white/30">
+                        <Maximize2 size={16} /> Ver em tela cheia
+                      </div>
+                    </div>
                   </div>
+
                   <div className="p-5">
                     <div className="flex justify-between mb-2">
                       <h3 className="font-bold text-gray-800">{prod.title}</h3>
@@ -384,7 +402,7 @@ export default function App() {
                       href={`https://wa.me/55${NUMERO_LOJA}?text=Olá! Me chamo ${clientName} e quero encomendar: ${prod.title}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="block bg-green-500 hover:bg-green-600 text-white text-center py-2 rounded-xl font-bold flex justify-center gap-2 transition"
+                      className="bg-green-500 hover:bg-green-600 text-white text-center py-2 rounded-xl font-bold flex justify-center gap-2 transition"
                     >
                       <MessageCircle size={18} /> Encomendar
                     </a>
@@ -518,7 +536,6 @@ export default function App() {
                     </div>
                   </form>
                 </div>
-
                 <h3 className="text-xl font-bold text-gray-700 mb-4">
                   Lista de Produtos
                 </h3>
@@ -556,6 +573,23 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* MODAL TELA CHEIA (LIGHTBOX) */}
+      {fullscreenImage && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setFullscreenImage(null)}
+        >
+          <button className="absolute top-6 right-6 text-white/70 hover:text-white transition bg-black/20 p-2 rounded-full">
+            <X size={32} />
+          </button>
+          <img
+            src={fullscreenImage}
+            className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border-4 border-white/10 object-contain"
+            onClick={(e) => e.stopPropagation()} // Clicar na imagem não fecha
+          />
+        </div>
+      )}
 
       <footer className="bg-pink-800 text-pink-100 py-6 px-4 mt-auto border-t-4 border-pink-600">
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
