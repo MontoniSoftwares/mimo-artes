@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-// Importando Firebase
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
@@ -25,13 +24,9 @@ import {
   getFirestore,
   onSnapshot,
   query,
+  updateDoc,
   where,
 } from "firebase/firestore";
-
-// --- 1. CONFIGURAÇÃO SEGURA (PRODUÇÃO) ---
-// ⚠️ IMPORTANTE PARA O SEU DEPLOY NO VS CODE:
-// O código abaixo está comentado com '//' para não dar erro aqui no chat.
-// NO SEU COMPUTADOR: Remova as '//' das linhas 'import.meta.env' e apague as linhas com "".
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY,
@@ -45,12 +40,10 @@ const firebaseConfig = {
 const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY;
 const SENHA_ADMIN = import.meta.env.VITE_SENHA_ADMIN;
 
-// --- 2. CONSTANTES GERAIS ---
 const NUMERO_LOJA = "22988682317";
 const LOGO_LOJA = "/mirian1.jpeg";
 const LOGO_RODAPE = "/logo-ms.png";
 
-// Inicialização condicional para evitar erros se as chaves estiverem vazias
 let app, auth, db;
 try {
   if (firebaseConfig.apiKey) {
@@ -59,7 +52,6 @@ try {
     db = getFirestore(app);
   }
 } catch (e) {
-  // CORREÇÃO: Agora usamos o 'e' para mostrar o erro real no console
   console.error("Aguardando configuração do .env...", e);
 }
 
@@ -68,19 +60,15 @@ export default function App() {
   const [view, setView] = useState("landing");
   const [products, setProducts] = useState([]);
 
-  // Estado para Tela Cheia (Zoom)
   const [fullscreenImage, setFullscreenImage] = useState(null);
 
-  // Estados do Cliente
   const [clientName, setClientName] = useState("");
   const [clientWhats, setClientWhats] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Estados do Admin
   const [isAdminLogged, setIsAdminLogged] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
 
-  // Estados do Formulário de Produto
   const [newProdTitle, setNewProdTitle] = useState("");
   const [newProdPrice, setNewProdPrice] = useState("");
   const [newProdDesc, setNewProdDesc] = useState("");
@@ -88,7 +76,9 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
 
-  // --- EFEITOS ---
+  // Novo estado para edição
+  const [editingProduct, setEditingProduct] = useState(null);
+
   useEffect(() => {
     if (!auth) return;
     signInAnonymously(auth).catch((error) => {
@@ -105,7 +95,6 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
-  // Se não houver configuração (caso esqueça o .env), mostra aviso
   if (!firebaseConfig.apiKey && !SENHA_ADMIN) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-pink-50 p-4 text-center">
@@ -123,8 +112,6 @@ export default function App() {
       </div>
     );
   }
-
-  // --- FUNÇÕES ---
 
   const handleNavigation = (targetView) => {
     if (view === "admin" && targetView !== "admin") {
@@ -199,7 +186,6 @@ export default function App() {
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
-    // Verifica contra a senha (que deve vir do .env no deploy)
     if (passwordInput === SENHA_ADMIN) {
       setIsAdminLogged(true);
       setPasswordInput("");
@@ -231,28 +217,61 @@ export default function App() {
     }
   };
 
-  const handleAddProduct = async (e) => {
+  // Função para iniciar edição carregando dados do produto
+  const handleEditProduct = (prod) => {
+    setEditingProduct(prod);
+    setNewProdTitle(prod.title);
+    setNewProdPrice(prod.price);
+    setNewProdDesc(prod.description);
+    setPreviewUrl(prod.image);
+  };
+
+  // Função atualizada que salva ou adiciona produto
+  const handleSaveProduct = async (e) => {
     e.preventDefault();
-    if (!newProdTitle || !newProdPrice || !imageFile)
-      return alert("Preencha tudo!");
+    if (!newProdTitle || !newProdPrice)
+      return alert("Preencha o nome e preço!");
+
     setIsUploading(true);
-    const imageUrl = await uploadImageToImgBB(imageFile);
-    if (imageUrl) {
-      await addDoc(collection(db, "products"), {
-        title: newProdTitle,
-        price: newProdPrice,
-        description: newProdDesc,
-        image: imageUrl,
-        createdAt: new Date().toISOString(),
-      });
+
+    let imageUrl = previewUrl;
+    if (imageFile) {
+      const uploadedUrl = await uploadImageToImgBB(imageFile);
+      if (uploadedUrl) imageUrl = uploadedUrl;
+    }
+
+    try {
+      if (editingProduct) {
+        const prodDoc = doc(db, "products", editingProduct.id);
+        await updateDoc(prodDoc, {
+          title: newProdTitle,
+          price: newProdPrice,
+          description: newProdDesc,
+          image: imageUrl,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        await addDoc(collection(db, "products"), {
+          title: newProdTitle,
+          price: newProdPrice,
+          description: newProdDesc,
+          image: imageUrl,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       setNewProdTitle("");
       setNewProdPrice("");
       setNewProdDesc("");
       setImageFile(null);
       setPreviewUrl("");
-      alert("Produto cadastrado!");
+      setEditingProduct(null);
+    } catch (error) {
+      console.error("Erro ao salvar produto:", error);
+      alert("Erro ao salvar produto, tente novamente.");
+    } finally {
+      setIsUploading(false);
     }
-    setIsUploading(false);
   };
 
   const handleFileChange = (e) => {
@@ -267,7 +286,6 @@ export default function App() {
     if (window.confirm("Excluir?")) await deleteDoc(doc(db, "products", id));
   };
 
-  // --- VISUAL ---
   return (
     <div className="min-h-screen bg-pink-50 font-sans text-gray-800 flex flex-col">
       {/* HEADER */}
@@ -305,7 +323,6 @@ export default function App() {
       )}
 
       <main className="flex-grow">
-        {/* LANDING PAGE */}
         {view === "landing" && (
           <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-pink-100 to-pink-200 px-4">
             <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center border-4 border-pink-300">
@@ -338,7 +355,6 @@ export default function App() {
                   maxLength={16}
                   required
                 />
-
                 <button
                   type="submit"
                   disabled={isLoggingIn}
@@ -350,14 +366,12 @@ export default function App() {
                 >
                   {isLoggingIn ? (
                     <>
-                      {" "}
                       <Loader className="animate-spin" size={20} />{" "}
-                      Verificando...{" "}
+                      Verificando...
                     </>
                   ) : (
                     <>
-                      {" "}
-                      <ShoppingBag size={20} /> ACESSAR CATÁLOGO{" "}
+                      <ShoppingBag size={20} /> ACESSAR CATÁLOGO
                     </>
                   )}
                 </button>
@@ -373,7 +387,6 @@ export default function App() {
           </div>
         )}
 
-        {/* CATÁLOGO */}
         {view === "catalog" && (
           <div className="max-w-5xl mx-auto p-6">
             <div className="text-center mb-8">
@@ -392,7 +405,6 @@ export default function App() {
                   key={prod.id}
                   className="bg-white rounded-2xl shadow-md overflow-hidden border border-pink-50 hover:shadow-xl transition-all"
                 >
-                  {/* --- IMAGEM CLICÁVEL COM ÍCONE DE ZOOM SEMPRE VISÍVEL --- */}
                   <div
                     className="h-64 bg-gray-100 overflow-hidden relative group cursor-pointer"
                     onClick={() => setFullscreenImage(prod.image)}
@@ -406,20 +418,15 @@ export default function App() {
                           "https://placehold.co/400x300/pink/white?text=Sem+Imagem";
                       }}
                     />
-
-                    {/* Ícone de Zoom (Sempre visível no canto) */}
                     <div className="absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-md text-pink-600 hover:bg-pink-600 hover:text-white transition-colors duration-300 z-10">
                       <Maximize2 size={18} />
                     </div>
-
-                    {/* Overlay de Texto (Apenas Hover/Desktop) */}
                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                       <span className="bg-white/90 text-pink-700 px-3 py-1 rounded-full text-xs font-bold shadow-lg">
                         Ver Detalhes
                       </span>
                     </div>
                   </div>
-
                   <div className="p-5">
                     <div className="flex justify-between mb-2">
                       <h3 className="font-bold text-gray-800">{prod.title}</h3>
@@ -445,7 +452,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ÁREA ADMIN */}
         {view === "admin" && (
           <div className="max-w-4xl mx-auto p-6">
             {!isAdminLogged ? (
@@ -498,12 +504,12 @@ export default function App() {
                     </button>
                   </div>
                   <form
-                    onSubmit={handleAddProduct}
+                    onSubmit={handleSaveProduct}
                     className="grid grid-cols-1 md:grid-cols-2 gap-4"
                   >
                     <input
                       type="text"
-                      className="p-3 border rounded-lg outline-none focus:border-pink-400"
+                      className="col-span-2 p-3 border rounded-lg outline-none focus:border-pink-400"
                       placeholder="Nome da Peça"
                       value={newProdTitle}
                       onChange={(e) => setNewProdTitle(e.target.value)}
@@ -511,7 +517,7 @@ export default function App() {
                     />
                     <input
                       type="number"
-                      className="p-3 border rounded-lg outline-none focus:border-pink-400"
+                      className="col-span-2 p-3 border rounded-lg outline-none focus:border-pink-400"
                       placeholder="Preço (R$)"
                       value={newProdPrice}
                       onChange={(e) => setNewProdPrice(e.target.value)}
@@ -561,6 +567,8 @@ export default function App() {
                           <>
                             <Loader className="animate-spin" /> Enviando...
                           </>
+                        ) : editingProduct ? (
+                          "Salvar Alterações"
                         ) : (
                           "Salvar Produto"
                         )}
@@ -591,12 +599,20 @@ export default function App() {
                           </p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteProduct(prod.id)}
-                        className="text-red-400 hover:bg-red-50 p-2 rounded-lg"
-                      >
-                        <Trash2 size={20} />
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditProduct(prod)}
+                          className="text-blue-400 hover:bg-blue-50 p-2 rounded-lg"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(prod.id)}
+                          className="text-red-400 hover:bg-red-50 p-2 rounded-lg"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -606,7 +622,6 @@ export default function App() {
         )}
       </main>
 
-      {/* MODAL TELA CHEIA (LIGHTBOX) */}
       {fullscreenImage && (
         <div
           className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
@@ -618,7 +633,7 @@ export default function App() {
           <img
             src={fullscreenImage}
             className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border-4 border-white/10 object-contain"
-            onClick={(e) => e.stopPropagation()} // Clicar na imagem não fecha
+            onClick={(e) => e.stopPropagation()}
           />
         </div>
       )}
