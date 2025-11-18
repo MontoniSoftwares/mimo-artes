@@ -1,7 +1,8 @@
 import {
-  KeyRound, // Ícone novo para senha
+  KeyRound,
   Loader,
   Lock,
+  LogOut,
   MessageCircle,
   Plus,
   ShoppingBag,
@@ -18,11 +19,16 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   getFirestore,
   onSnapshot,
+  query,
+  where,
 } from "firebase/firestore";
 
 // --- 1. CONFIGURAÇÃO ---
+// NOTA: Para a pré-visualização funcionar aqui, uso as chaves diretas.
+// No seu VS Code, use o método seguro: apiKey: import.meta.env.VITE_API_KEY
 const firebaseConfig = {
   apiKey: "AIzaSyBKTv8fGLe3v6Kkp--jPQwqMh3fPgeYxBI",
   authDomain: "loja-mimo-artes.firebaseapp.com",
@@ -32,10 +38,12 @@ const firebaseConfig = {
   appId: "1:116269374400:web:fb19325e734672533fc625",
 };
 
+// Chave do ImgBB direta para funcionar na preview
 const IMGBB_KEY = "c84a5731b24f82f3da759d1f73e1c3f1";
 
-// 🔐 SUA SENHA MESTRA (Mude aqui se quiser)
 const SENHA_ADMIN = "mimo123";
+// O número da loja para receber os pedidos (apenas números)
+const NUMERO_LOJA = "22988682317";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -52,10 +60,11 @@ export default function App() {
   // Estados do Cliente
   const [clientName, setClientName] = useState("");
   const [clientWhats, setClientWhats] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Estados do Admin
-  const [isAdminLogged, setIsAdminLogged] = useState(false); // Já digitou a senha?
-  const [passwordInput, setPasswordInput] = useState(""); // O que está digitando
+  const [isAdminLogged, setIsAdminLogged] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
 
   // Estados do Formulário de Produto
   const [newProdTitle, setNewProdTitle] = useState("");
@@ -67,7 +76,9 @@ export default function App() {
 
   // --- EFEITOS ---
   useEffect(() => {
-    signInAnonymously(auth).catch(console.error);
+    signInAnonymously(auth).catch((error) => {
+      console.error("Erro no login anônimo:", error);
+    });
     return onAuthStateChanged(auth, setUser);
   }, []);
 
@@ -81,34 +92,23 @@ export default function App() {
 
   // --- FUNÇÕES ---
 
-  // ✨ FUNÇÃO DE MÁSCARA CORRIGIDA
   const handlePhoneChange = (e) => {
-    // 1. Pega apenas os números do que foi digitado
     const rawValue = e.target.value.replace(/\D/g, "");
-
-    // 2. Limita a 11 dígitos
     const value = rawValue.slice(0, 11);
 
     let formatted = value;
-
-    // 3. Monta a máscara do zero baseado na quantidade de números
     if (value.length > 10) {
-      // Formato completo: (22) 9 9999-9999
       formatted = `(${value.slice(0, 2)}) ${value.slice(2, 3)} ${value.slice(
         3,
         7
       )}-${value.slice(7)}`;
     } else if (value.length > 6) {
-      // Formato parcial: (22) 9 9999...
       formatted = `(${value.slice(0, 2)}) ${value.slice(2, 3)} ${value.slice(
         3
       )}`;
     } else if (value.length > 2) {
-      // Formato inicial: (22) 9...
       formatted = `(${value.slice(0, 2)}) ${value.slice(2)}`;
     }
-
-    // Se tiver menos de 2 dígitos, mostra só os números mesmo (ex: "2" ou "22")
 
     setClientWhats(formatted);
   };
@@ -116,24 +116,52 @@ export default function App() {
   const handleClientEnter = async (e) => {
     e.preventDefault();
     const rawPhone = clientWhats.replace(/\D/g, "");
-    if (!clientName || rawPhone.length < 10)
-      return alert("Preencha nome e WhatsApp!");
 
-    await addDoc(collection(db, "leads"), {
-      name: clientName,
-      whatsapp: rawPhone,
-      whatsappFormatted: clientWhats,
-      date: new Date().toISOString(),
-    });
-    setView("catalog");
+    if (!clientName || rawPhone.length < 10) {
+      return alert("Por favor, preencha seu nome e um WhatsApp válido!");
+    }
+
+    setIsLoggingIn(true);
+
+    try {
+      const q = query(
+        collection(db, "leads"),
+        where("whatsapp", "==", rawPhone)
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const existingData = querySnapshot.docs[0].data();
+        alert(
+          `Que bom te ver de novo, ${
+            existingData.name || clientName
+          }! Acesso liberado.`
+        );
+      } else {
+        await addDoc(collection(db, "leads"), {
+          name: clientName,
+          whatsapp: rawPhone,
+          whatsappFormatted: clientWhats,
+          date: new Date().toISOString(),
+        });
+        alert("Cadastro realizado com sucesso! Bem-vindo(a).");
+      }
+
+      setView("catalog");
+    } catch (error) {
+      console.error("Erro ao verificar login:", error);
+      alert("Houve um erro ao conectar, mas vamos liberar seu acesso!");
+      setView("catalog");
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
-  // FUNÇÃO NOVA: Verificar Senha
   const handleAdminLogin = (e) => {
     e.preventDefault();
     if (passwordInput === SENHA_ADMIN) {
       setIsAdminLogged(true);
-      setPasswordInput(""); // Limpa o campo por segurança
+      setPasswordInput("");
     } else {
       alert("Senha incorreta! Tente novamente.");
       setPasswordInput("");
@@ -143,7 +171,12 @@ export default function App() {
   const uploadImageToImgBB = async (file) => {
     const formData = new FormData();
     formData.append("image", file);
-    if (!IMGBB_KEY) return null;
+
+    if (!IMGBB_KEY) {
+      alert("ERRO: Chave do ImgBB não encontrada!");
+      return null;
+    }
+
     try {
       const response = await fetch(
         `https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`,
@@ -151,7 +184,8 @@ export default function App() {
       );
       const data = await response.json();
       return data.success ? data.data.url : null;
-    } catch {
+    } catch (error) {
+      console.error("Erro upload:", error);
       return null;
     }
   };
@@ -244,6 +278,7 @@ export default function App() {
               <p className="text-gray-500 italic mb-8">
                 "Fazendo Artes com amor"
               </p>
+
               <form onSubmit={handleClientEnter} className="space-y-4">
                 <input
                   type="text"
@@ -262,13 +297,31 @@ export default function App() {
                   maxLength={16}
                   required
                 />
+
                 <button
                   type="submit"
-                  className="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-4 rounded-xl shadow-lg mt-4 flex justify-center gap-2"
+                  disabled={isLoggingIn}
+                  className={`w-full text-white font-bold py-4 rounded-xl shadow-lg mt-4 flex justify-center items-center gap-2 ${
+                    isLoggingIn
+                      ? "bg-pink-400"
+                      : "bg-pink-500 hover:bg-pink-600"
+                  }`}
                 >
-                  <ShoppingBag size={20} /> ACESSAR CATÁLOGO
+                  {isLoggingIn ? (
+                    <>
+                      {" "}
+                      <Loader className="animate-spin" size={20} />{" "}
+                      Verificando...{" "}
+                    </>
+                  ) : (
+                    <>
+                      {" "}
+                      <ShoppingBag size={20} /> ACESSAR CATÁLOGO{" "}
+                    </>
+                  )}
                 </button>
               </form>
+
               <button
                 onClick={() => setView("admin")}
                 className="text-xs text-gray-400 mt-6 flex mx-auto gap-1"
@@ -314,13 +367,13 @@ export default function App() {
                     <p className="text-gray-600 text-sm mb-4">
                       {prod.description}
                     </p>
+
+                    {/* BOTÃO DE ENCOMENDA ATUALIZADO PARA O NÚMERO DA LOJA */}
                     <a
-                      href={`https://wa.me/55${clientWhats.replace(
-                        /\D/g,
-                        ""
-                      )}?text=Olá! Quero encomendar: ${prod.title}`}
+                      href={`https://wa.me/55${NUMERO_LOJA}?text=Olá! Me chamo ${clientName} e quero encomendar: ${prod.title}`}
                       target="_blank"
-                      className="block bg-green-500 text-white text-center py-2 rounded-xl font-bold flex justify-center gap-2"
+                      rel="noreferrer"
+                      className="block bg-green-500 hover:bg-green-600 text-white text-center py-2 rounded-xl font-bold flex justify-center gap-2 transition"
                     >
                       <MessageCircle size={18} /> Encomendar
                     </a>
@@ -334,7 +387,6 @@ export default function App() {
         {/* ÁREA ADMIN (COM PROTEÇÃO DE SENHA) */}
         {view === "admin" && (
           <div className="max-w-4xl mx-auto p-6">
-            {/* TELA DE LOGIN DA DONA */}
             {!isAdminLogged ? (
               <div className="max-w-sm mx-auto mt-20 bg-white p-8 rounded-2xl shadow-xl border-2 border-pink-100 text-center">
                 <div className="bg-pink-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -371,7 +423,6 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              // SE JÁ LOGOU, MOSTRA O PAINEL
               <>
                 <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border-l-4 border-pink-500">
                   <div className="flex justify-between items-center mb-4">
