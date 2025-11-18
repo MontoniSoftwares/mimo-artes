@@ -392,25 +392,31 @@ export default function App() {
                   key={prod.id}
                   className="bg-white rounded-2xl shadow-md overflow-hidden border border-pink-50 hover:shadow-xl transition-all"
                 >
-                  {/* IMAGEM CLICÁVEL COM EFEITO HOVER */}
+                  {/* --- IMAGEM CLICÁVEL COM ÍCONE DE ZOOM SEMPRE VISÍVEL --- */}
                   <div
                     className="h-64 bg-gray-100 overflow-hidden relative group cursor-pointer"
                     onClick={() => setFullscreenImage(prod.image)}
-                    title="Clique para ver em tela cheia"
                   >
                     <img
                       src={prod.image}
+                      alt={prod.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       onError={(e) => {
                         e.target.src =
                           "https://placehold.co/400x300/pink/white?text=Sem+Imagem";
                       }}
                     />
-                    {/* Overlay com Texto */}
-                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
-                      <div className="bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg border border-white/30">
-                        <Maximize2 size={16} /> Ver em tela cheia
-                      </div>
+
+                    {/* Ícone de Zoom (Sempre visível no canto) */}
+                    <div className="absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-md text-pink-600 hover:bg-pink-600 hover:text-white transition-colors duration-300 z-10">
+                      <Maximize2 size={18} />
+                    </div>
+
+                    {/* Overlay de Texto (Apenas Hover/Desktop) */}
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <span className="bg-white/90 text-pink-700 px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+                        Ver Detalhes
+                      </span>
                     </div>
                   </div>
 
