@@ -26,31 +26,37 @@ import {
   where,
 } from "firebase/firestore";
 
-// --- 1. CONFIGURAÇÃO ---
-// NOTA: Para a pré-visualização funcionar aqui, uso as chaves diretas.
-// No seu VS Code, use o método seguro: apiKey: import.meta.env.VITE_API_KEY
+// --- 1. CONFIGURAÇÃO SEGURA (PRODUÇÃO) ---
+// O código agora busca as chaves EXCLUSIVAMENTE do arquivo .env
 const firebaseConfig = {
-  apiKey: "AIzaSyBKTv8fGLe3v6Kkp--jPQwqMh3fPgeYxBI",
-  authDomain: "loja-mimo-artes.firebaseapp.com",
-  projectId: "loja-mimo-artes",
-  storageBucket: "loja-mimo-artes.firebasestorage.app",
-  messagingSenderId: "116269374400",
-  appId: "1:116269374400:web:fb19325e734672533fc625",
+  apiKey: import.meta.env.VITE_API_KEY,
+  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_APP_ID,
 };
 
-// Chave do ImgBB direta para funcionar na preview
-const IMGBB_KEY = "c84a5731b24f82f3da759d1f73e1c3f1";
+// Chave do ImgBB via variável de ambiente
+const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY;
 
+// Constantes da Loja
 const SENHA_ADMIN = "mimo123";
-// O número da loja para receber os pedidos (apenas números)
 const NUMERO_LOJA = "22988682317";
+const LOGO_LOJA = "/mirian1.jpeg";
+const LOGO_RODAPE = "/logo-ms.png";
+
+// Verificação de segurança para evitar tela branca silenciosa
+if (!firebaseConfig.apiKey) {
+  console.error("ERRO CRÍTICO: Variáveis de ambiente não encontradas.");
+  console.error(
+    "Verifique se o arquivo .env existe na raiz do projeto e se as chaves começam com VITE_"
+  );
+}
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-const LOGO_LOJA = "/mirian1.jpeg";
-const LOGO_RODAPE = "/logo-ms.png";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -77,7 +83,7 @@ export default function App() {
   // --- EFEITOS ---
   useEffect(() => {
     signInAnonymously(auth).catch((error) => {
-      console.error("Erro no login anônimo:", error);
+      console.error("Erro no login anônimo (verifique .env):", error);
     });
     return onAuthStateChanged(auth, setUser);
   }, []);
@@ -91,6 +97,13 @@ export default function App() {
   }, [user]);
 
   // --- FUNÇÕES ---
+
+  const handleNavigation = (targetView) => {
+    if (view === "admin" && targetView !== "admin") {
+      setIsAdminLogged(false);
+    }
+    setView(targetView);
+  };
 
   const handlePhoneChange = (e) => {
     const rawValue = e.target.value.replace(/\D/g, "");
@@ -147,11 +160,11 @@ export default function App() {
         alert("Cadastro realizado com sucesso! Bem-vindo(a).");
       }
 
-      setView("catalog");
+      handleNavigation("catalog");
     } catch (error) {
       console.error("Erro ao verificar login:", error);
       alert("Houve um erro ao conectar, mas vamos liberar seu acesso!");
-      setView("catalog");
+      handleNavigation("catalog");
     } finally {
       setIsLoggingIn(false);
     }
@@ -173,7 +186,7 @@ export default function App() {
     formData.append("image", file);
 
     if (!IMGBB_KEY) {
-      alert("ERRO: Chave do ImgBB não encontrada!");
+      alert("ERRO CRÍTICO: Chave do ImgBB não encontrada no arquivo .env!");
       return null;
     }
 
@@ -235,7 +248,7 @@ export default function App() {
           <div className="max-w-5xl mx-auto flex justify-between items-center">
             <div
               className="flex items-center gap-3 cursor-pointer"
-              onClick={() => setView("landing")}
+              onClick={() => handleNavigation("landing")}
             >
               <img
                 src={LOGO_LOJA}
@@ -252,7 +265,7 @@ export default function App() {
             <div className="flex gap-3">
               <button
                 onClick={() =>
-                  setView(view === "catalog" ? "admin" : "catalog")
+                  handleNavigation(view === "catalog" ? "admin" : "catalog")
                 }
                 className="bg-white text-pink-600 px-3 py-1.5 rounded-full text-xs font-bold"
               >
@@ -323,7 +336,7 @@ export default function App() {
               </form>
 
               <button
-                onClick={() => setView("admin")}
+                onClick={() => handleNavigation("admin")}
                 className="text-xs text-gray-400 mt-6 flex mx-auto gap-1"
               >
                 <Lock size={12} /> Área Admin
@@ -367,8 +380,6 @@ export default function App() {
                     <p className="text-gray-600 text-sm mb-4">
                       {prod.description}
                     </p>
-
-                    {/* BOTÃO DE ENCOMENDA ATUALIZADO PARA O NÚMERO DA LOJA */}
                     <a
                       href={`https://wa.me/55${NUMERO_LOJA}?text=Olá! Me chamo ${clientName} e quero encomendar: ${prod.title}`}
                       target="_blank"
@@ -384,7 +395,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ÁREA ADMIN (COM PROTEÇÃO DE SENHA) */}
+        {/* ÁREA ADMIN */}
         {view === "admin" && (
           <div className="max-w-4xl mx-auto p-6">
             {!isAdminLogged ? (
@@ -398,7 +409,6 @@ export default function App() {
                 <p className="text-gray-500 mb-6 text-sm">
                   Digite a senha para gerenciar a loja.
                 </p>
-
                 <form onSubmit={handleAdminLogin} className="space-y-4">
                   <input
                     type="password"
@@ -416,7 +426,7 @@ export default function App() {
                   </button>
                 </form>
                 <button
-                  onClick={() => setView("landing")}
+                  onClick={() => handleNavigation("landing")}
                   className="text-xs text-gray-400 mt-4 hover:text-pink-500"
                 >
                   Voltar para o início
@@ -437,7 +447,6 @@ export default function App() {
                       <LogOut size={12} /> Sair
                     </button>
                   </div>
-
                   <form
                     onSubmit={handleAddProduct}
                     className="grid grid-cols-1 md:grid-cols-2 gap-4"
@@ -548,26 +557,32 @@ export default function App() {
         )}
       </main>
 
-      <footer className="bg-pink-800 text-pink-100 py-8 px-4 mt-auto text-center text-sm border-t-4 border-pink-600">
-        <div className="flex flex-col items-center gap-3 mb-6">
-          <div className="w-16 h-16 bg-white p-1.5 rounded-xl shadow-lg">
-            <img src={LOGO_RODAPE} className="w-full h-full object-contain" />
+      <footer className="bg-pink-800 text-pink-100 py-6 px-4 mt-auto border-t-4 border-pink-600">
+        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white p-1 rounded-lg shadow-lg flex-shrink-0">
+              <img
+                src={LOGO_RODAPE}
+                alt="Logo Montoni"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div>
+              <p className="font-bold text-white text-sm leading-tight">
+                Montoni Tech Soluções
+              </p>
+              <p className="text-pink-300 text-[10px] uppercase font-semibold tracking-wider">
+                Inova Simples (IS)
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-bold text-white text-lg">
-              Montoni Tech Soluções
+          <div className="flex flex-col items-center md:items-end gap-1 text-xs opacity-80">
+            <p className="font-mono bg-pink-900/30 px-2 py-0.5 rounded text-[10px]">
+              CNPJ: 62.553.238/0001-00
             </p>
-            <p className="text-pink-300 text-xs uppercase font-semibold">
-              Inova Simples (IS)
-            </p>
+            <p>© 2025 Todos os direitos reservados.</p>
           </div>
         </div>
-        <p className="font-mono bg-pink-900/30 inline-block px-2 py-0.5 rounded text-xs">
-          CNPJ: 62.553.238/0001-00
-        </p>
-        <p className="text-xs mt-2">
-          © 2025 Montoni Tech Soluções. Todos os direitos reservados.
-        </p>
       </footer>
     </div>
   );
