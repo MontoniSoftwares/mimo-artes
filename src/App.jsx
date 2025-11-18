@@ -505,25 +505,17 @@ export default function App() {
                   </div>
                   <form
                     onSubmit={handleSaveProduct}
-                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                    className="grid grid-cols-1 gap-4"
                   >
                     <input
                       type="text"
-                      className="col-span-2 p-3 border rounded-lg outline-none focus:border-pink-400"
+                      className="p-3 border rounded-lg outline-none focus:border-pink-400"
                       placeholder="Nome da Peça"
                       value={newProdTitle}
                       onChange={(e) => setNewProdTitle(e.target.value)}
                       required
                     />
-                    <input
-                      type="number"
-                      className="col-span-2 p-3 border rounded-lg outline-none focus:border-pink-400"
-                      placeholder="Preço (R$)"
-                      value={newProdPrice}
-                      onChange={(e) => setNewProdPrice(e.target.value)}
-                      required
-                    />
-                    <div className="col-span-2 border-2 border-dashed border-pink-200 rounded-xl p-4 text-center hover:bg-pink-50 transition cursor-pointer relative">
+                    <div className="border-2 border-dashed border-pink-200 rounded-xl p-4 text-center hover:bg-pink-50 transition cursor-pointer relative">
                       <input
                         type="file"
                         accept="image/*"
@@ -548,12 +540,20 @@ export default function App() {
                       )}
                     </div>
                     <textarea
-                      className="col-span-2 p-3 border rounded-lg outline-none focus:border-pink-400 h-24"
+                      className="p-3 border rounded-lg outline-none focus:border-pink-400 h-24"
                       placeholder="Descrição..."
                       value={newProdDesc}
                       onChange={(e) => setNewProdDesc(e.target.value)}
                     ></textarea>
-                    <div className="col-span-2">
+                    <input
+                      type="number"
+                      className="p-3 border rounded-lg outline-none focus:border-pink-400"
+                      placeholder="Preço (R$)"
+                      value={newProdPrice}
+                      onChange={(e) => setNewProdPrice(e.target.value)}
+                      required
+                    />
+                    <div>
                       <button
                         type="submit"
                         disabled={isUploading}
