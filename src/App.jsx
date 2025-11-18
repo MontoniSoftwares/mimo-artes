@@ -28,10 +28,10 @@ import {
   where,
 } from "firebase/firestore";
 
-// --- 1. CONFIGURAÇÃO (ATENÇÃO AQUI) ---
-// ⚠️ MODO HÍBRIDO:
-// As chaves estão expostas AQUI apenas para a pré-visualização funcionar.
-// NO SEU COMPUTADOR: Descomente as linhas 'import.meta.env' e apague as strings diretas.
+// --- 1. CONFIGURAÇÃO SEGURA (PRODUÇÃO) ---
+// ⚠️ IMPORTANTE PARA O SEU DEPLOY NO VS CODE:
+// O código abaixo está comentado com '//' para não dar erro aqui no chat.
+// NO SEU COMPUTADOR: Remova as '//' das linhas 'import.meta.env' e apague as linhas com "".
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY,
@@ -42,20 +42,26 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_APP_ID,
 };
 
-// Chave do ImgBB
-// const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY; <--- USE ESTA NO VS CODE
-const IMGBB_KEY = "c84a5731b24f82f3da759d1f73e1c3f1";
+const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY;
+const SENHA_ADMIN = import.meta.env.VITE_SENHA_ADMIN;
 
-// Constantes da Loja
-const SENHA_ADMIN = "mimo123";
+// --- 2. CONSTANTES GERAIS ---
 const NUMERO_LOJA = "22988682317";
 const LOGO_LOJA = "/mirian1.jpeg";
 const LOGO_RODAPE = "/logo-ms.png";
 
-// Inicialização
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Inicialização condicional para evitar erros se as chaves estiverem vazias
+let app, auth, db;
+try {
+  if (firebaseConfig.apiKey) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
+} catch (e) {
+  // CORREÇÃO: Agora usamos o 'e' para mostrar o erro real no console
+  console.error("Aguardando configuração do .env...", e);
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -84,19 +90,39 @@ export default function App() {
 
   // --- EFEITOS ---
   useEffect(() => {
+    if (!auth) return;
     signInAnonymously(auth).catch((error) => {
-      console.error("Erro no login anônimo:", error);
+      console.error("Erro no login anônimo (verifique .env):", error);
     });
     return onAuthStateChanged(auth, setUser);
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
     const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
       setProducts(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     });
     return () => unsubscribe();
   }, [user]);
+
+  // Se não houver configuração (caso esqueça o .env), mostra aviso
+  if (!firebaseConfig.apiKey && !SENHA_ADMIN) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-pink-50 p-4 text-center">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md">
+          <Loader className="w-12 h-12 text-pink-500 mx-auto mb-4 animate-spin" />
+          <h1 className="text-xl font-bold text-gray-800 mb-2">
+            Configuração Necessária
+          </h1>
+          <p className="text-gray-600 text-sm">
+            Para ver a loja, configure o arquivo <code>.env</code> no seu
+            computador e descomente as linhas de configuração no{" "}
+            <code>App.jsx</code>.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // --- FUNÇÕES ---
 
@@ -173,6 +199,7 @@ export default function App() {
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
+    // Verifica contra a senha (que deve vir do .env no deploy)
     if (passwordInput === SENHA_ADMIN) {
       setIsAdminLogged(true);
       setPasswordInput("");
@@ -186,9 +213,8 @@ export default function App() {
     const formData = new FormData();
     formData.append("image", file);
 
-    // Verifica se a chave existe (seja via .env ou hardcoded)
     if (!IMGBB_KEY) {
-      alert("ERRO CRÍTICO: Chave do ImgBB não encontrada!");
+      alert("ERRO CRÍTICO: Chave do ImgBB não configurada!");
       return null;
     }
 
@@ -402,7 +428,7 @@ export default function App() {
                       href={`https://wa.me/55${NUMERO_LOJA}?text=Olá! Me chamo ${clientName} e quero encomendar: ${prod.title}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="bg-green-500 hover:bg-green-600 text-white text-center py-2 rounded-xl font-bold flex justify-center gap-2 transition"
+                      className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl font-bold flex justify-center gap-2 transition"
                     >
                       <MessageCircle size={18} /> Encomendar
                     </a>
